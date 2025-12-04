@@ -1,0 +1,19 @@
+# Install Tailscale
+Start-Process msiexec.exe -ArgumentList "/i https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi /qn" -Wait
+
+# Login with your auth key
+tailscale up --authkey tskey-auth-kmvHfPi99n11CNTRL-oKT4BBZbJd54Xi9dR46Jd5UeCX9Z15AK --accept-routes --accept-dns
+
+# Enable Tailscale subnet & incoming connections
+tailscale set --ssh
+tailscale up --shields-down
+
+# Open firewall ports for RDP
+netsh advfirewall firewall add rule name="RDP Allow 3389" dir=in action=allow protocol=TCP localport=3389
+
+# Enable RDP
+Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+# Restart RDP service
+Restart-Service TermService -Force
