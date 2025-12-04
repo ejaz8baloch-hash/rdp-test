@@ -1,0 +1,65 @@
+name: RDP Diagnostic Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rdp-test:
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check RDP Service (TermService)
+        run: |
+          Write-Host "=== TermService (RDP) Status ==="
+          Get-Service -Name TermService | Format-List *
+
+      - name: Check if Port 3389 is Listening
+        run: |
+          Write-Host "=== Port 3389 Listening Check ==="
+          netstat -ano | findstr ":3389" || Write-Host "Port 3389 NOT listening"
+
+      - name: Show Firewall RDP Rules
+        run: |
+          Write-Host "=== Firewall Rules Related to RDP ==="
+          netsh advfirewall firewall show rule name=all | findstr /i "3389" || Write-Host "No direct 3389 rule found."
+
+      - name: Install Tailscale
+        run: |
+          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi"
+          $installerPath = "$env:TEMP\tailscale.msi"
+          
+          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
+          Start-Process msiexec.exe -ArgumentList "/i `"$installerPath`" /quiet /norestart" -Wait
+
+      - name: Connect Tailscale
+        run: |
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up `
+            --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} `
+            --hostname=rdp-test-${{ github.run_id }}
+
+          $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+          echo "TS_IP=$ip" >> $env:GITHUB_ENV
+          Write-Host "Tailscale IPv4: $ip"
+
+      - name: Test Port 3389 over Tailscale
+        run: |
+          Write-Host "=== Testing RDP Port over Tailscale ==="
+          $result = Test-NetConnection -ComputerName $env:TS_IP -Port 3389
+          $result
+
+          if ($result.TcpTestSucceeded) {
+            Write-Host "RDP is accessible!"
+          } else {
+            Write-Host "RDP is NOT accessible over Tailscale."
+          }
+
+      - name: Final Result
+        run: |
+          Write-Host "`n====== FINAL ANALYSIS ======"
+          Write-Host "• If TermService is running → OK"
+          Write-Host "• If port 3389 NOT listening → GitHub blocked RDP"
+          Write-Host "• If firewall shows no 3389 rule → RDP blocked"
+          Write-Host "• If Tailscale test fails → RDP cannot be used"
+          Write-Host "============================="
+          Write-Host "END OF TEST"
