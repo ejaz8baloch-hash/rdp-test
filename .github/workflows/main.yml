@@ -1,26 +1,28 @@
-name: test-rdp
+name: rdp
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  connect:
     runs-on: windows-latest
+
     steps:
 
     - name: Install Tailscale
-      run: msiexec.exe /i https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi /qn
+      run: |
+        msiexec.exe /i https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi /qn
 
-    - name: Start Tailscale
+    - name: Login to Tailscale
       run: |
         tailscale up --authkey tskey-auth-kmvHfPi99n11CNTRL-oKT4BBZbJd54Xi9dR46Jd5UeCX9Z15AK --accept-routes --accept-dns --shields-down
         tailscale set --ssh
 
-    - name: Enable RDP
+    - name: Enable RDP and Firewall
       run: |
         Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        netsh advfirewall firewall add rule name="RDP 3389" dir=in action=allow protocol=TCP localport=3389
+        netsh advfirewall firewall add rule name="RDP3389" protocol=TCP dir=in localport=3389 action=allow
 
-    - name: Keep VM Alive
+    - name: Keep alive
       run: ping -t 127.0.0.1
