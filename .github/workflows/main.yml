@@ -1,19 +1,26 @@
-# Install Tailscale
-Start-Process msiexec.exe -ArgumentList "/i https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi /qn" -Wait
+name: test-rdp
 
-# Login with your auth key
-tailscale up --authkey tskey-auth-kmvHfPi99n11CNTRL-oKT4BBZbJd54Xi9dR46Jd5UeCX9Z15AK --accept-routes --accept-dns
+on:
+  workflow_dispatch:
 
-# Enable Tailscale subnet & incoming connections
-tailscale set --ssh
-tailscale up --shields-down
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
 
-# Open firewall ports for RDP
-netsh advfirewall firewall add rule name="RDP Allow 3389" dir=in action=allow protocol=TCP localport=3389
+    - name: Install Tailscale
+      run: msiexec.exe /i https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi /qn
 
-# Enable RDP
-Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
-Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+    - name: Start Tailscale
+      run: |
+        tailscale up --authkey tskey-auth-kmvHfPi99n11CNTRL-oKT4BBZbJd54Xi9dR46Jd5UeCX9Z15AK --accept-routes --accept-dns --shields-down
+        tailscale set --ssh
 
-# Restart RDP service
-Restart-Service TermService -Force
+    - name: Enable RDP
+      run: |
+        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        netsh advfirewall firewall add rule name="RDP 3389" dir=in action=allow protocol=TCP localport=3389
+
+    - name: Keep VM Alive
+      run: ping -t 127.0.0.1
